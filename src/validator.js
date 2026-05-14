@@ -28,8 +28,12 @@ const WISE_ALL_COLUMNS = [
   'Exchange rate', 'Reference', 'Batch', 'Created by', 'Category', 'Note',
 ];
 
-const VALID_DIRECTIONS = new Set(['IN', 'OUT']);
-const VALID_STATUSES   = new Set(['COMPLETED', 'CANCELLED', 'PENDING', 'FAILED', 'WAITING_FOR_AUTHORIZATION']);
+const VALID_DIRECTIONS = new Set(['IN', 'OUT', 'NEUTRAL']);
+const VALID_STATUSES   = new Set([
+  'COMPLETED', 'CANCELLED', 'PENDING', 'FAILED',
+  'REFUNDED', 'WAITING_FOR_AUTHORIZATION', 'CHARGED_BACK',
+  'PROCESSING', 'UNKNOWN',
+]);
 
 /**
  * Validate a parsed PapaParse result against the Wise CSV schema.
@@ -125,7 +129,8 @@ function validateWiseCSV(parseResult) {
         type: 'INVALID_VALUE',
         line: lineNum,
         column: 'Direction',
-        message: `Row ${lineNum}: Invalid value "${row['Direction']}" in "Direction". Expected "IN" or "OUT".`,
+        message: `Row ${lineNum}: Unrecognised direction "${row['Direction']}". File will still load.`,
+        warning: true,
       });
     }
 
@@ -135,7 +140,8 @@ function validateWiseCSV(parseResult) {
         type: 'INVALID_VALUE',
         line: lineNum,
         column: 'Status',
-        message: `Row ${lineNum}: Unknown status "${row['Status']}" in "Status". Expected COMPLETED, CANCELLED, PENDING, etc.`,
+        message: `Row ${lineNum}: Unrecognised status "${row['Status']}". File will still load.`,
+        warning: true,
       });
     }
 

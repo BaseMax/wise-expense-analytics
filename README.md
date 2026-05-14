@@ -77,7 +77,7 @@ Exchange rate, Reference, Batch, Created by, Category, Note
 |---|---|---|
 | [Chart.js](https://www.chartjs.org/) | 4.4.4 | Interactive charts |
 | [PapaParse](https://www.papaparse.com/) | 5.4.1 | Fast CSV parsing |
-| Vanilla JS / CSS |, | No framework, no build tools |
+| Vanilla JS / CSS | - | No framework, no build tools |
 
 ---
 

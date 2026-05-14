@@ -271,18 +271,23 @@
           <div class="chart-head">
             <div>
               <h3 class="chart-title">Daily Spending Trend</h3>
-              <p class="chart-desc">Day-by-day spending over time</p>
+              <p class="chart-desc">Select a month to drill down into daily details</p>
             </div>
-            <div class="chart-controls">
-              <label class="control-label" for="daily-month-filter">Month</label>
-              <select id="daily-month-filter" class="select-input select-sm" aria-label="Filter daily chart by month">
-                <option value="ALL">All months</option>
-              </select>
-            </div>
+            <nav class="month-nav" id="month-nav" aria-label="Month navigation">
+              <button class="month-nav-btn" id="month-prev" type="button" title="Previous month" aria-label="Previous month" disabled>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="15,18 9,12 15,6"/></svg>
+              </button>
+              <div class="month-nav-label" id="month-display">All Months</div>
+              <button class="month-nav-btn" id="month-next" type="button" title="Next month" aria-label="Next month" disabled>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="9,18 15,12 9,6"/></svg>
+              </button>
+            </nav>
           </div>
           <div class="chart-body chart-body-tall">
             <canvas id="chart-daily" aria-label="Daily spending trend chart"></canvas>
           </div>
+          <!-- Daily breakdown table — shown when a specific month is selected -->
+          <div id="daily-breakdown" class="daily-breakdown" role="region" aria-label="Daily breakdown table"></div>
         </div>
       </div>
 

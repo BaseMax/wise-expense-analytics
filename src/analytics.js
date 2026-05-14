@@ -7,6 +7,9 @@
 
 'use strict';
 
+const MONTH_NAMES_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const WEEKDAY_NAMES     = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+
 function parseDate(str) {
   if (!str) return null;
   const d = new Date(str.trim().replace(' ', 'T'));
@@ -28,15 +31,12 @@ function toMonthKey(d) {
 
 function formatMonthLabel(monthKey) {
   const [y, m] = monthKey.split('-');
-  const names = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return `${names[parseInt(m, 10) - 1]} ${y}`;
+  return `${MONTH_NAMES_SHORT[parseInt(m, 10) - 1]} ${y}`;
 }
 
 function formatDayLabel(dateKey) {
   const d = new Date(dateKey + 'T00:00:00');
-  const names = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return `${names[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]}`;
+  return `${WEEKDAY_NAMES[d.getDay()].slice(0, 3)} ${d.getDate()} ${MONTH_NAMES_SHORT[d.getMonth()]}`;
 }
 
 function daysInMonth(monthKey) {
@@ -147,117 +147,93 @@ function buildMonthlyTotals(dailyTotals) {
   return map;
 }
 
-/**
- * Main entry-point: compute full analytics for one currency.
- * @param {Transaction[]} allTransactions
- * @param {string} currency
- * @param {string} statusFilter 'COMPLETED' | 'ALL'
- * @returns {Analytics}
- */
-function computeAnalytics(allTransactions, currency, statusFilter = 'COMPLETED') {
-  const isAllCurrencies = currency === 'ALL';
-  const txs = filterTransactions(allTransactions, currency, statusFilter);
+// ── Analytics sub-builders (extracted from computeAnalytics) ─────────────────
 
-  let totalOut = 0, totalIn = 0, totalFees = 0;
-  const outByCurrency = {};
-  const inByCurrency  = {};
-  txs.forEach(t => {
-    if (t.direction === 'OUT') {
-      totalOut += t.srcAmount;
-      totalFees += t.feeAmount;
-      if (isAllCurrencies) outByCurrency[t.srcCurrency] = (outByCurrency[t.srcCurrency] || 0) + t.srcAmount;
-    }
-    if (t.direction === 'IN') {
-      totalIn += t.srcAmount;
-      if (isAllCurrencies) inByCurrency[t.srcCurrency]  = (inByCurrency[t.srcCurrency]  || 0) + t.srcAmount;
-    }
-  });
-
-  const dailyTotals   = buildDailyTotals(txs);
-  const monthlyTotals = buildMonthlyTotals(dailyTotals);
-
-  const activeDays    = Object.keys(dailyTotals).filter(d => dailyTotals[d].out > 0).length;
-  const outDays       = Object.entries(dailyTotals).filter(([, v]) => v.out > 0);
-  const dailyAvg      = outDays.length > 0 ? totalOut / outDays.length : 0;
-
+function buildDailyAvgPerMonth(monthlyTotals) {
   const dailyAvgPerMonth      = {};
   const dailyCountAvgPerMonth = {};
-  Object.entries(monthlyTotals).forEach(([month, m]) => {
-    dailyAvgPerMonth[month]      = m.activeDays > 0 ? m.out / m.activeDays : 0;
-    dailyCountAvgPerMonth[month] = m.activeDays > 0 ? (m.outCount || 0) / m.activeDays : 0;
+  Object.entries(monthlyTotals).forEach(([m, data]) => {
+    dailyAvgPerMonth[m]      = data.activeDays > 0 ? data.out / data.activeDays : 0;
+    dailyCountAvgPerMonth[m] = data.activeDays > 0 ? (data.outCount || 0) / data.activeDays : 0;
   });
+  return { dailyAvgPerMonth, dailyCountAvgPerMonth };
+}
 
-  const minMaxPerMonth = {};
+function buildMinMaxPerMonth(dailyTotals) {
+  const map = {};
   Object.entries(dailyTotals).forEach(([dateKey, day]) => {
     if (day.out === 0) return;
     const month = dateKey.slice(0, 7);
-    if (!minMaxPerMonth[month]) {
-      minMaxPerMonth[month] = {
-        min: { dateKey, amount: Infinity },
-        max: { dateKey, amount: -Infinity },
-      };
-    }
-    if (day.out < minMaxPerMonth[month].min.amount) minMaxPerMonth[month].min = { dateKey, amount: day.out };
-    if (day.out > minMaxPerMonth[month].max.amount) minMaxPerMonth[month].max = { dateKey, amount: day.out };
+    if (!map[month]) map[month] = {
+      min: { dateKey, amount: Infinity },
+      max: { dateKey, amount: -Infinity },
+    };
+    if (day.out < map[month].min.amount) map[month].min = { dateKey, amount: day.out };
+    if (day.out > map[month].max.amount) map[month].max = { dateKey, amount: day.out };
   });
+  return map;
+}
 
-  const categoryMap = {};
+function buildCategories(txs) {
+  const map = {};
   txs.filter(t => t.direction === 'OUT').forEach(t => {
     const cat = t.category || 'Uncategorized';
-    if (!categoryMap[cat]) categoryMap[cat] = { amount: 0, count: 0 };
-    categoryMap[cat].amount += t.srcAmount;
-    categoryMap[cat].count++;
+    if (!map[cat]) map[cat] = { amount: 0, count: 0 };
+    map[cat].amount += t.srcAmount;
+    map[cat].count++;
   });
-  const categories = Object.entries(categoryMap)
+  return Object.entries(map)
     .map(([name, d]) => ({ name, amount: d.amount, count: d.count }))
     .sort((a, b) => b.amount - a.amount);
+}
 
-  const merchantMap = {};
+function buildMerchants(txs, limit = 15) {
+  const map = {};
   txs.filter(t => t.direction === 'OUT' && t.targetName).forEach(t => {
-    if (!merchantMap[t.targetName]) merchantMap[t.targetName] = { amount: 0, count: 0, category: t.category };
-    merchantMap[t.targetName].amount += t.srcAmount;
-    merchantMap[t.targetName].count++;
+    if (!map[t.targetName]) map[t.targetName] = { amount: 0, count: 0, category: t.category };
+    map[t.targetName].amount += t.srcAmount;
+    map[t.targetName].count++;
   });
-  const topMerchants = Object.entries(merchantMap)
+  const sorted = Object.entries(map)
     .map(([name, d]) => ({ name, amount: d.amount, count: d.count, category: d.category }))
-    .sort((a, b) => b.amount - a.amount)
-    .slice(0, 15);
+    .sort((a, b) => b.amount - a.amount);
+  return { topMerchants: sorted.slice(0, limit), uniqueMerchants: sorted.length };
+}
 
-  const weekdayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const weekdayMap   = Array.from({ length: 7 }, () => ({ total: 0, count: 0 }));
+function buildWeekdayPattern(txs) {
+  const map = Array.from({ length: 7 }, () => ({ total: 0, count: 0 }));
   txs.filter(t => t.direction === 'OUT').forEach(t => {
-    const dow = t.date.getDay();
-    weekdayMap[dow].total += t.srcAmount;
-    weekdayMap[dow].count++;
+    const entry = map[t.date.getDay()];
+    entry.total += t.srcAmount;
+    entry.count++;
   });
-  const weekdayPattern = weekdayNames.map((name, i) => ({
+  return WEEKDAY_NAMES.map((name, i) => ({
     name,
     short: name.slice(0, 3),
-    avg:   weekdayMap[i].count > 0 ? weekdayMap[i].total / weekdayMap[i].count : 0,
-    total: weekdayMap[i].total,
-    count: weekdayMap[i].count,
+    avg:   map[i].count > 0 ? map[i].total / map[i].count : 0,
+    total: map[i].total,
+    count: map[i].count,
   }));
+}
 
-  const allDates = txs.map(t => t.date).filter(Boolean);
-  const minDate = allDates.length ? new Date(Math.min(...allDates)) : null;
-  const maxDate = allDates.length ? new Date(Math.max(...allDates)) : null;
-
-  const monthlySummary = Object.entries(monthlyTotals)
+function buildMonthlySummary(monthlyTotals) {
+  return Object.entries(monthlyTotals)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([monthKey, data]) => ({
       monthKey,
-      label:      formatMonthLabel(monthKey),
-      out:        data.out,
-      in:         data.in,
-      net:        data.in - data.out,
-      count:      data.count,
-      activeDays: data.activeDays,
-      dailyAvg:   data.activeDays > 0 ? data.out / data.activeDays : 0,
+      label:       formatMonthLabel(monthKey),
+      out:         data.out,
+      in:          data.in,
+      net:         data.in - data.out,
+      count:       data.count,
+      activeDays:  data.activeDays,
+      dailyAvg:    data.activeDays > 0 ? data.out / data.activeDays : 0,
       daysInMonth: daysInMonth(monthKey),
     }));
+}
 
-  const sortedDays = Object.keys(dailyTotals).sort();
-  const dailyChartData = sortedDays.map(d => ({
+function buildDailyChartData(dailyTotals) {
+  return Object.keys(dailyTotals).sort().map(d => ({
     dateKey:  d,
     label:    formatDayLabel(d),
     out:      dailyTotals[d].out,
@@ -266,35 +242,70 @@ function computeAnalytics(allTransactions, currency, statusFilter = 'COMPLETED')
     outCount: dailyTotals[d].outCount || 0,
     inCount:  dailyTotals[d].inCount  || 0,
   }));
+}
+
+// ── Main entry-point ─────────────────────────────────────────────────────────
+
+function computeAnalytics(allTransactions, currency, statusFilter = 'COMPLETED') {
+  const isAllCurrencies = currency === 'ALL';
+  const txs = filterTransactions(allTransactions, currency, statusFilter);
+
+  let totalOut = 0, totalIn = 0, totalFees = 0, outCount = 0, inCount = 0;
+  const outByCurrency = {};
+  const inByCurrency  = {};
+
+  txs.forEach(t => {
+    if (t.direction === 'OUT') {
+      totalOut  += t.srcAmount;
+      totalFees += t.feeAmount;
+      outCount++;
+      if (isAllCurrencies) outByCurrency[t.srcCurrency] = (outByCurrency[t.srcCurrency] || 0) + t.srcAmount;
+    } else if (t.direction === 'IN') {
+      totalIn += t.srcAmount;
+      inCount++;
+      if (isAllCurrencies) inByCurrency[t.srcCurrency] = (inByCurrency[t.srcCurrency] || 0) + t.srcAmount;
+    }
+  });
+
+  const dailyTotals   = buildDailyTotals(txs);
+  const monthlyTotals = buildMonthlyTotals(dailyTotals);
+
+  const activeDays = Object.values(dailyTotals).filter(d => d.out > 0).length;
+  const dailyAvg   = activeDays > 0 ? totalOut / activeDays : 0;
+
+  const { dailyAvgPerMonth, dailyCountAvgPerMonth } = buildDailyAvgPerMonth(monthlyTotals);
+  const { topMerchants, uniqueMerchants }            = buildMerchants(txs);
+
+  const allDates = txs.map(t => t.date).filter(Boolean);
 
   return {
     currency,
     statusFilter,
-    totalOut,
-    totalIn,
-    totalFees,
-    netBalance:     totalIn - totalOut,
-    txCount:        txs.length,
-    outCount:       txs.filter(t => t.direction === 'OUT').length,
-    inCount:        txs.filter(t => t.direction === 'IN').length,
-    activeDays,
-    dailyAvg,
-    uniqueMerchants: Object.keys(merchantMap).length,
-    minDate,
-    maxDate,
-    dailyTotals,
-    monthlyTotals,
-    dailyAvgPerMonth,
-    minMaxPerMonth,
-    categories,
-    topMerchants,
-    weekdayPattern,
-    monthlySummary,
-    dailyChartData,
-    dailyCountAvgPerMonth,
     isAllCurrencies,
     outByCurrency,
     inByCurrency,
-    sortedMonths: Object.keys(monthlyTotals).sort(),
+    totalOut,
+    totalIn,
+    totalFees,
+    netBalance:           totalIn - totalOut,
+    txCount:              txs.length,
+    outCount,
+    inCount,
+    activeDays,
+    dailyAvg,
+    uniqueMerchants,
+    minDate:              allDates.length ? new Date(Math.min(...allDates)) : null,
+    maxDate:              allDates.length ? new Date(Math.max(...allDates)) : null,
+    dailyTotals,
+    monthlyTotals,
+    dailyAvgPerMonth,
+    dailyCountAvgPerMonth,
+    minMaxPerMonth:       buildMinMaxPerMonth(dailyTotals),
+    categories:           buildCategories(txs),
+    topMerchants,
+    weekdayPattern:       buildWeekdayPattern(txs),
+    monthlySummary:       buildMonthlySummary(monthlyTotals),
+    dailyChartData:       buildDailyChartData(dailyTotals),
+    sortedMonths:         Object.keys(monthlyTotals).sort(),
   };
 }

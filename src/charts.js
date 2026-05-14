@@ -87,17 +87,36 @@ function fmt(amount, currency, decimals = 2) {
   return currency === 'ALL' ? n : `${n} ${currency}`;
 }
 
+/** Convert 'YYYY-MM' to short chart-axis label, e.g. "Jan '25". */
+function monthKeyToLabel(monthKey) {
+  const [y, mo] = monthKey.split('-');
+  return `${MONTH_NAMES_SHORT[parseInt(mo, 10) - 1]} '${y.slice(2)}`;
+}
+
+const WEEKDAY_COLORS = [T.indigo, T.purple, T.cyan, T.green, T.amber, T.pink, T.orange];
+
+function makeXAxis(extraTicks = {}) {
+  return { grid: { color: T.grid }, ticks: { color: T.text, ...extraTicks } };
+}
+
+function makeYAxis(currency, isAllCurrencies) {
+  return {
+    grid: { color: T.grid },
+    ticks: {
+      color: T.text,
+      callback: v => isAllCurrencies ? v.toLocaleString() : `${v.toLocaleString()} ${currency}`,
+    },
+    beginAtZero: true,
+  };
+}
+
 function renderMonthlyChart(analytics) {
   destroyChart('monthly');
   const el = document.getElementById('chart-monthly');
   if (!el) return;
 
   const { sortedMonths, monthlyTotals, currency, isAllCurrencies } = analytics;
-  const labels = sortedMonths.map(m => {
-    const [y, mo] = m.split('-');
-    const names = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    return `${names[parseInt(mo,10)-1]} '${y.slice(2)}`;
-  });
+  const labels = sortedMonths.map(monthKeyToLabel);
 
   const outData = sortedMonths.map(m => isAllCurrencies
     ? (monthlyTotals[m].outCount || 0)
@@ -144,20 +163,7 @@ function renderMonthlyChart(analytics) {
           },
         },
       },
-      scales: {
-        x: {
-          grid: { color: T.grid },
-          ticks: { color: T.text },
-        },
-        y: {
-          grid: { color: T.grid },
-          ticks: {
-            color: T.text,
-            callback: v => isAllCurrencies ? v.toLocaleString() : `${v.toLocaleString()} ${currency}`,
-          },
-          beginAtZero: true,
-        },
-      },
+      scales: { x: makeXAxis(), y: makeYAxis(currency, isAllCurrencies) },
     },
   });
 }
@@ -213,24 +219,8 @@ function renderDailyChart(analytics, monthFilter = 'ALL') {
         },
       },
       scales: {
-        x: {
-          grid: { color: T.grid },
-          ticks: {
-            color: T.text,
-            maxTicksLimit: 16,
-            maxRotation: 45,
-          },
-        },
-        y: {
-          grid: { color: T.grid },
-          ticks: {
-            color: T.text,
-            callback: v => isAllCurrencies
-              ? v.toLocaleString()
-              : `${v.toLocaleString()} ${analytics.currency}`,
-          },
-          beginAtZero: true,
-        },
+        x: makeXAxis({ maxTicksLimit: 16, maxRotation: 45 }),
+        y: makeYAxis(analytics.currency, isAllCurrencies),
       },
     },
   });
@@ -305,11 +295,7 @@ function renderDailyAvgChart(analytics) {
 
   const { isAllCurrencies } = analytics;
   const months = analytics.sortedMonths;
-  const labels = months.map(m => {
-    const [y, mo] = m.split('-');
-    const names = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    return `${names[parseInt(mo,10)-1]} '${y.slice(2)}`;
-  });
+  const labels = months.map(monthKeyToLabel);
   const avgs = isAllCurrencies
     ? months.map(m => +(analytics.dailyCountAvgPerMonth[m] || 0).toFixed(2))
     : months.map(m => +(analytics.dailyAvgPerMonth[m] || 0).toFixed(2));
@@ -344,14 +330,7 @@ function renderDailyAvgChart(analytics) {
           },
         },
       },
-      scales: {
-        x: { grid: { color: T.grid }, ticks: { color: T.text } },
-        y: {
-          grid: { color: T.grid },
-          ticks: { color: T.text, callback: v => isAllCurrencies ? v : `${v} ${analytics.currency}` },
-          beginAtZero: true,
-        },
-      },
+      scales: { x: makeXAxis(), y: makeYAxis(analytics.currency, isAllCurrencies) },
     },
   });
 }
@@ -370,10 +349,8 @@ function renderWeekdayChart(analytics) {
       datasets: [{
         label: isAllCurrencies ? 'Transactions' : 'Avg per Transaction',
         data: isAllCurrencies ? days.map(d => d.count) : days.map(d => +d.avg.toFixed(2)),
-        backgroundColor: days.map((_, i) =>
-          hexAlpha([T.indigo,T.purple,T.cyan,T.green,T.amber,T.pink,T.orange][i], 0.8)
-        ),
-        hoverBackgroundColor: [T.indigo,T.purple,T.cyan,T.green,T.amber,T.pink,T.orange],
+        backgroundColor:      WEEKDAY_COLORS.map(c => hexAlpha(c, 0.8)),
+        hoverBackgroundColor: WEEKDAY_COLORS,
         borderRadius: 8,
         borderSkipped: false,
       }],
@@ -395,14 +372,7 @@ function renderWeekdayChart(analytics) {
           },
         },
       },
-      scales: {
-        x: { grid: { color: T.grid }, ticks: { color: T.text } },
-        y: {
-          grid: { color: T.grid },
-          ticks: { color: T.text, callback: v => isAllCurrencies ? v.toLocaleString() : `${v} ${analytics.currency}` },
-          beginAtZero: true,
-        },
-      },
+      scales: { x: makeXAxis(), y: makeYAxis(analytics.currency, isAllCurrencies) },
     },
   });
 }

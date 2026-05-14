@@ -1,6 +1,6 @@
 # Wise Expense Analytics
 
-> A beautiful, privacy-first web app that turns your Wise transaction history CSV into actionable financial insights — entirely in your browser, with zero data sent to any server.
+> A beautiful, privacy-first web app that turns your Wise transaction history CSV into actionable financial insights, entirely in your browser, with zero data sent to any server.
 
 [![MIT License](https://img.shields.io/badge/license-MIT-6366f1.svg)](LICENSE)
 [![GitHub](https://img.shields.io/badge/github-BaseMax-181717.svg?logo=github)](https://github.com/BaseMax)
@@ -14,11 +14,11 @@
 | **Drag & Drop Upload** | Drop or browse your Wise CSV export |
 | **CSV Validation** | Human-readable errors with line & column references |
 | **Multi-Currency** | Automatic currency detection with per-currency analytics |
-| **Monthly Overview** | Bar chart — total spending & income per month |
-| **Daily Trend** | Line chart — day-by-day spending, filterable by month |
-| **Category Breakdown** | Doughnut chart — spending distribution across all Wise categories |
+| **Monthly Overview** | Bar chart, total spending & income per month |
+| **Daily Trend** | Line chart, day-by-day spending, filterable by month |
+| **Category Breakdown** | Doughnut chart, spending distribution across all Wise categories |
 | **Daily Average / Month** | Average spending per active day in each month |
-| **Day-of-Week Pattern** | Bar chart — which weekday you spend most |
+| **Day-of-Week Pattern** | Bar chart, which weekday you spend most |
 | **Min / Max Days** | Best and worst spending days for every month |
 | **Top Merchants** | Your 15 highest-spending destinations |
 | **Monthly Summary Table** | Totals, net balance, active days, and daily averages |
@@ -30,9 +30,9 @@
 
 Upload your CSV and get an instant dashboard:
 
-- **Stats row** — Total Spent, Total Received, Transactions, Daily Average, Active Days, Unique Merchants  
+- **Stats row**, Total Spent, Total Received, Transactions, Daily Average, Active Days, Unique Merchants  
 - **5 interactive Chart.js charts** with smooth animations  
-- **3 insight tables** — Top Merchants, Min/Max Days, Monthly Summary  
+- **3 insight tables**, Top Merchants, Min/Max Days, Monthly Summary  
 
 ---
 
@@ -77,7 +77,7 @@ Exchange rate, Reference, Batch, Created by, Category, Note
 |---|---|---|
 | [Chart.js](https://www.chartjs.org/) | 4.4.4 | Interactive charts |
 | [PapaParse](https://www.papaparse.com/) | 5.4.1 | Fast CSV parsing |
-| Vanilla JS / CSS | — | No framework, no build tools |
+| Vanilla JS / CSS |, | No framework, no build tools |
 
 ---
 
@@ -103,4 +103,4 @@ wise-expense-analytics/
 
 ## License
 
-MIT License — Copyright © 2026 [Seyyed Ali Mohammadiyeh (Max Base)](https://github.com/BaseMax)
+MIT License, Copyright © 2026 [Seyyed Ali Mohammadiyeh (Max Base)](https://github.com/BaseMax)

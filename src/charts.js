@@ -261,6 +261,8 @@ function renderCategoryChart(analytics) {
                 text: `${label} (${((ds.data[i] / total) * 100).toFixed(1)}%)`,
                 fillStyle: ds.backgroundColor[i],
                 strokeStyle: ds.backgroundColor[i],
+                fontColor: T.text,
+                color: T.text,
                 lineWidth: 0,
                 index: i,
                 hidden: false,

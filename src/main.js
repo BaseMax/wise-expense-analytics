@@ -391,13 +391,16 @@ function initEvents() {
   dropZone.addEventListener('dragover',  e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
   dropZone.addEventListener('drop', e => {
     e.preventDefault();
+    e.stopPropagation();
     dropZone.classList.remove('dragging');
     const file = e.dataTransfer.files[0];
     if (file) processFile(file);
   });
 
+  // Allow dropping anywhere else on the upload view (outside the drop zone)
   Views.upload.addEventListener('dragover', e => e.preventDefault());
   Views.upload.addEventListener('drop', e => {
+    if (dropZone.contains(e.target)) return; // already handled by dropZone listener
     e.preventDefault();
     const file = e.dataTransfer.files[0];
     if (file) processFile(file);

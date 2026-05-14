@@ -1,5 +1,5 @@
 /**
- * Wise Expense Analytics — Analytics Engine
+ * Wise Expense Analytics - Analytics Engine
  * Copyright 2026 Seyyed Ali Mohammadiyeh (Max Base)
  * MIT License
  * https://github.com/BaseMax/wise-expense-analytics

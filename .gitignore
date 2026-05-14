@@ -1,0 +1,8 @@
+*.csv
+*.rar
+*.zip
+
+.DS_Store
+
+.idea/
+.vscode/

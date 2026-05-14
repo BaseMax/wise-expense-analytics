@@ -126,12 +126,12 @@ function renderCurrencyTabs() {
   App.currencies.forEach(cur => makeTab(cur, cur));
 }
 
-const MONTH_NAMES_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-const MONTH_NAMES_LONG  = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const MONTH_NAMES_LONG = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
 function monthLabel(monthKey, long = false) {
   const [y, m] = monthKey.split('-');
-  return `${(long ? MONTH_NAMES_LONG : MONTH_NAMES_SHORT)[parseInt(m, 10) - 1]} ${y}`;
+  const names  = long ? MONTH_NAMES_LONG : MONTH_NAMES_SHORT;
+  return `${names[parseInt(m, 10) - 1]} ${y}`;
 }
 
 function buildMonthNavigator() {
@@ -317,6 +317,11 @@ function updateStats(a) {
   }
 }
 
+function wrapTable(cols, rows) {
+  const head = cols.map(c => `<th>${c}</th>`).join('');
+  return `<table class="data-table"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table>`;
+}
+
 function renderMerchantsTable(analytics) {
   const container = $('table-merchants');
   if (!analytics.topMerchants.length) {
@@ -339,20 +344,7 @@ function renderMerchantsTable(analytics) {
     </tr>
   `).join('');
 
-  container.innerHTML = `
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th>Merchant</th>
-          <th>Category</th>
-          <th>Txns</th>
-          <th>Share</th>
-          <th>Total</th>
-        </tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>
-  `;
+  container.innerHTML = wrapTable(['Merchant', 'Category', 'Txns', 'Share', 'Total'], rows);
 }
 
 function renderMinMaxTable(analytics) {
@@ -365,9 +357,7 @@ function renderMinMaxTable(analytics) {
   }
 
   const rows = entries.map(([monthKey, { min, max }]) => {
-    const [y, mo] = monthKey.split('-');
-    const names = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    const label = `${names[parseInt(mo,10)-1]} ${y}`;
+    const label = formatMonthLabel(monthKey);
     return `
       <tr>
         <td>${label}</td>
@@ -378,19 +368,7 @@ function renderMinMaxTable(analytics) {
     `;
   }).join('');
 
-  container.innerHTML = `
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th>Month</th>
-          <th>Min Day</th>
-          <th>Max Day</th>
-          <th>Range</th>
-        </tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>
-  `;
+  container.innerHTML = wrapTable(['Month', 'Min Day', 'Max Day', 'Range'], rows);
 }
 
 function renderMonthlySummaryTable(analytics) {
@@ -414,22 +392,7 @@ function renderMonthlySummaryTable(analytics) {
     </tr>
   `).join('');
 
-  container.innerHTML = `
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th>Month</th>
-          <th>Total Spent</th>
-          <th>Total Received</th>
-          <th>Net</th>
-          <th>Daily Avg</th>
-          <th>Active / Total Days</th>
-          <th>Transactions</th>
-        </tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>
-  `;
+  container.innerHTML = wrapTable(['Month', 'Total Spent', 'Total Received', 'Net', 'Daily Avg', 'Active / Total Days', 'Transactions'], rows);
 }
 
 function updateFileInfoBar() {
@@ -531,8 +494,10 @@ function escHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
-function initEvents() {
+function initFileUpload() {
   const fileInput = $('file-input');
+  const dropZone  = $('drop-zone');
+
   $('browse-btn').addEventListener('click', () => fileInput.click());
   fileInput.addEventListener('change', e => {
     const file = e.target.files[0];
@@ -540,19 +505,18 @@ function initEvents() {
     fileInput.value = '';
   });
 
-  const dropZone = $('drop-zone');
   dropZone.addEventListener('keydown', e => {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); }
   });
 
-  document.addEventListener('dragover',  e => e.preventDefault());
-  document.addEventListener('drop',      e => e.preventDefault());
+  document.addEventListener('dragover', e => e.preventDefault());
+  document.addEventListener('drop',     e => e.preventDefault());
 
   dropZone.addEventListener('dragenter', e => { e.preventDefault(); dropZone.classList.add('dragging'); });
   dropZone.addEventListener('dragleave', e => {
     if (!dropZone.contains(e.relatedTarget)) dropZone.classList.remove('dragging');
   });
-  dropZone.addEventListener('dragover',  e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
   dropZone.addEventListener('drop', e => {
     e.preventDefault();
     e.stopPropagation();
@@ -568,12 +532,16 @@ function initEvents() {
     const file = e.dataTransfer.files[0];
     if (file) processFile(file);
   });
+}
 
+function initErrorView() {
   $('try-again-btn').addEventListener('click', () => {
     showView('upload');
     $('error-list').innerHTML = '';
   });
+}
 
+function initDashboardControls() {
   $('change-file-btn').addEventListener('click', () => {
     showView('upload');
     destroyAllCharts();
@@ -581,11 +549,16 @@ function initEvents() {
     App.analytics    = null;
   });
 
-
   $('status-filter').addEventListener('change', () => refreshDashboard());
 
   $('month-prev').addEventListener('click', () => navigateMonth(-1));
   $('month-next').addEventListener('click', () => navigateMonth(+1));
+}
+
+function initEvents() {
+  initFileUpload();
+  initErrorView();
+  initDashboardControls();
 }
 
 document.addEventListener('DOMContentLoaded', () => {

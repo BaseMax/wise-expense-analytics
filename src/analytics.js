@@ -147,8 +147,6 @@ function buildMonthlyTotals(dailyTotals) {
   return map;
 }
 
-// ── Analytics sub-builders (extracted from computeAnalytics) ─────────────────
-
 function buildDailyAvgPerMonth(monthlyTotals) {
   const dailyAvgPerMonth      = {};
   const dailyCountAvgPerMonth = {};
@@ -243,8 +241,6 @@ function buildDailyChartData(dailyTotals) {
     inCount:  dailyTotals[d].inCount  || 0,
   }));
 }
-
-// ── Main entry-point ─────────────────────────────────────────────────────────
 
 function computeAnalytics(allTransactions, currency, statusFilter = 'COMPLETED') {
   const isAllCurrencies = currency === 'ALL';

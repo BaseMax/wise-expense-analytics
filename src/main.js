@@ -111,18 +111,19 @@ function renderErrors(errors) {
 function renderCurrencyTabs() {
   const container = $('currency-tabs');
   container.innerHTML = '';
-  App.currencies.forEach(cur => {
+
+  const makeTab = (label, value) => {
     const btn = document.createElement('button');
-    btn.className = `tab-btn${cur === App.selectedCurrency ? ' active' : ''}`;
-    btn.textContent = cur;
+    btn.className = `tab-btn${value === App.selectedCurrency ? ' active' : ''}`;
+    btn.textContent = label;
     btn.setAttribute('role', 'tab');
-    btn.setAttribute('aria-selected', cur === App.selectedCurrency ? 'true' : 'false');
-    btn.addEventListener('click', () => {
-      App.selectedCurrency = cur;
-      refreshDashboard();
-    });
+    btn.setAttribute('aria-selected', value === App.selectedCurrency ? 'true' : 'false');
+    btn.addEventListener('click', () => { App.selectedCurrency = value; refreshDashboard(); });
     container.appendChild(btn);
-  });
+  };
+
+  makeTab('All', 'ALL');
+  App.currencies.forEach(cur => makeTab(cur, cur));
 }
 
 const MONTH_NAMES_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -196,39 +197,45 @@ function renderDailyBreakdownTable(monthKey) {
   const statusFilter = $('status-filter').value;
 
   const monthTxs = App.transactions.filter(t =>
-    t.srcCurrency === currency &&
-    t.monthKey    === monthKey &&
-    t.direction   === 'OUT' &&
+    (currency === 'ALL' || t.srcCurrency === currency) &&
+    t.monthKey  === monthKey &&
     (statusFilter === 'ALL' || t.status === statusFilter)
   );
 
   const byDay = {};
   monthTxs.forEach(t => {
-    if (!byDay[t.dateKey]) byDay[t.dateKey] = { out: 0, count: 0, cats: {}, min: Infinity, max: -Infinity };
+    if (!byDay[t.dateKey]) byDay[t.dateKey] = { out: 0, in: 0, outCount: 0, inCount: 0, cats: {}, min: Infinity, max: -Infinity };
     const d = byDay[t.dateKey];
-    d.out  += t.srcAmount;
-    d.count++;
-    d.cats[t.category] = (d.cats[t.category] || 0) + t.srcAmount;
-    if (t.srcAmount < d.min) d.min = t.srcAmount;
-    if (t.srcAmount > d.max) d.max = t.srcAmount;
+    if (t.direction === 'OUT') {
+      d.out += t.srcAmount;
+      d.outCount++;
+      d.cats[t.category] = (d.cats[t.category] || 0) + t.srcAmount;
+      if (t.srcAmount < d.min) d.min = t.srcAmount;
+      if (t.srcAmount > d.max) d.max = t.srcAmount;
+    } else {
+      d.in += t.srcAmount;
+      d.inCount++;
+    }
   });
 
   const days = Object.keys(byDay).sort();
 
   if (!days.length) {
-    container.innerHTML = '<div class="empty-state">No spending data for this month</div>';
+    container.innerHTML = '<div class="empty-state">No transaction data for this month</div>';
     return;
   }
 
-  const maxOut   = Math.max(...days.map(d => byDay[d].out));
-  const totalOut = days.reduce((s, d) => s + byDay[d].out, 0);
-  const WDAYS    = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const maxOut     = Math.max(...days.map(d => byDay[d].out));
+  const totalOut   = days.reduce((s, d) => s + byDay[d].out, 0);
+  const totalIn    = days.reduce((s, d) => s + byDay[d].in, 0);
+  const outTxCount = monthTxs.filter(t => t.direction === 'OUT').length;
+  const WDAYS      = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
   const rows = days.map(dateKey => {
-    const d      = byDay[dateKey];
-    const date   = new Date(dateKey + 'T00:00:00');
-    const topCat = Object.entries(d.cats).sort((a, b) => b[1] - a[1])[0]?.[0] || '—';
-    const pct    = maxOut > 0 ? (d.out / maxOut * 100).toFixed(1) : 0;
+    const d         = byDay[dateKey];
+    const date      = new Date(dateKey + 'T00:00:00');
+    const topCat    = Object.entries(d.cats).sort((a, b) => b[1] - a[1])[0]?.[0] || '—';
+    const pct       = maxOut > 0 ? (d.out / maxOut * 100).toFixed(1) : 0;
     const isWeekend = date.getDay() === 0 || date.getDay() === 6;
     return `
       <tr${isWeekend ? ' class="weekend-row"' : ''}>
@@ -240,12 +247,13 @@ function renderDailyBreakdownTable(monthKey) {
           <div class="progress-bar-wrap" style="margin-bottom:5px">
             <div class="progress-bar-fill" style="width:${pct}%"></div>
           </div>
-          <span class="amount-out">${fmtAmt(d.out, currency)}</span>
+          <span class="amount-out">${d.out > 0 ? fmtAmt(d.out, currency) : '—'}</span>
         </td>
-        <td>${d.count}</td>
+        <td class="${d.in > 0 ? 'amount-in' : 'amount-muted'}">${d.in > 0 ? fmtAmt(d.in, currency) : '—'}</td>
+        <td>${d.outCount > 0 ? d.outCount : '—'}</td>
         <td><span class="category-pill">${escHtml(topCat)}</span></td>
-        <td class="amount-muted">${fmtAmt(d.min === Infinity ? 0 : d.min, currency)}</td>
-        <td class="amount-muted">${fmtAmt(d.max === -Infinity ? 0 : d.max, currency)}</td>
+        <td class="amount-muted">${d.min !== Infinity ? fmtAmt(d.min, currency) : '—'}</td>
+        <td class="amount-muted">${d.max !== -Infinity ? fmtAmt(d.max, currency) : '—'}</td>
       </tr>`;
   }).join('');
 
@@ -253,8 +261,9 @@ function renderDailyBreakdownTable(monthKey) {
     <div class="breakdown-header">
       <span class="breakdown-title">${monthLabel(monthKey, true)}</span>
       <span class="breakdown-stat"><strong>${days.length}</strong> active day${days.length !== 1 ? 's' : ''}</span>
-      <span class="breakdown-stat"><strong>${monthTxs.length}</strong> transaction${monthTxs.length !== 1 ? 's' : ''}</span>
+      <span class="breakdown-stat"><strong>${outTxCount}</strong> transaction${outTxCount !== 1 ? 's' : ''}</span>
       <span class="breakdown-stat">Total <strong class="amount-out">${fmtAmt(totalOut, currency)}</strong></span>
+      ${totalIn > 0 ? `<span class="breakdown-stat">Received <strong class="amount-in">${fmtAmt(totalIn, currency)}</strong></span>` : ''}
       <span class="breakdown-stat">Avg/day <strong>${fmtAmt(totalOut / days.length, currency)}</strong></span>
     </div>
     <div class="table-scroll">
@@ -262,7 +271,8 @@ function renderDailyBreakdownTable(monthKey) {
         <thead>
           <tr>
             <th>Day</th>
-            <th>Amount Spent</th>
+            <th>Total Spend</th>
+            <th>Total Received</th>
             <th>Txns</th>
             <th>Top Category</th>
             <th>Min Txn</th>
@@ -275,16 +285,36 @@ function renderDailyBreakdownTable(monthKey) {
 }
 
 function fmtAmt(amount, currency) {
-  return `${amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')} ${currency}`;
+  const n = amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return currency === 'ALL' ? n : `${n} ${currency}`;
+}
+
+function fmtCurrencyBreakdown(byCurrency) {
+  const entries = Object.entries(byCurrency || {}).sort((a, b) => b[1] - a[1]);
+  if (!entries.length) return '—';
+  const top = entries.slice(0, 2).map(
+    ([cur, amt]) => `${amt.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')} ${cur}`
+  );
+  return top.join(' + ') + (entries.length > 2 ? ` (+${entries.length - 2} more)` : '');
 }
 
 function updateStats(a) {
-  $('stat-total-out').textContent   = fmtAmt(a.totalOut,  a.currency);
-  $('stat-total-in').textContent    = fmtAmt(a.totalIn,   a.currency);
-  $('stat-count').textContent       = a.txCount.toLocaleString();
-  $('stat-daily-avg').textContent   = fmtAmt(a.dailyAvg,  a.currency);
-  $('stat-active-days').textContent = a.activeDays.toLocaleString();
-  $('stat-merchants').textContent   = a.uniqueMerchants.toLocaleString();
+  if (a.isAllCurrencies) {
+    $('stat-total-out').textContent   = fmtCurrencyBreakdown(a.outByCurrency);
+    $('stat-total-in').textContent    = fmtCurrencyBreakdown(a.inByCurrency);
+    $('stat-count').textContent       = a.txCount.toLocaleString();
+    const avgTxns = a.activeDays > 0 ? (a.outCount / a.activeDays).toFixed(1) : '0';
+    $('stat-daily-avg').textContent   = `${avgTxns} txns/day`;
+    $('stat-active-days').textContent = a.activeDays.toLocaleString();
+    $('stat-merchants').textContent   = a.uniqueMerchants.toLocaleString();
+  } else {
+    $('stat-total-out').textContent   = fmtAmt(a.totalOut,  a.currency);
+    $('stat-total-in').textContent    = fmtAmt(a.totalIn,   a.currency);
+    $('stat-count').textContent       = a.txCount.toLocaleString();
+    $('stat-daily-avg').textContent   = fmtAmt(a.dailyAvg,  a.currency);
+    $('stat-active-days').textContent = a.activeDays.toLocaleString();
+    $('stat-merchants').textContent   = a.uniqueMerchants.toLocaleString();
+  }
 }
 
 function renderMerchantsTable(analytics) {
@@ -472,7 +502,7 @@ function processFile(file) {
         try {
           App.transactions      = parseTransactions(results.data);
           App.currencies        = detectCurrencies(App.transactions);
-          App.selectedCurrency  = App.currencies[0] || 'EUR';
+          App.selectedCurrency  = 'ALL';
           App.dailyMonthFilter  = 'ALL';
 
           refreshDashboard();

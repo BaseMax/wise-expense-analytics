@@ -83,7 +83,8 @@ function destroyAllCharts() {
 }
 
 function fmt(amount, currency, decimals = 2) {
-  return `${amount.toFixed(decimals).replace(/\B(?=(\d{3})+(?!\d))/g, ',')} ${currency}`;
+  const n = amount.toFixed(decimals).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return currency === 'ALL' ? n : `${n} ${currency}`;
 }
 
 function renderMonthlyChart(analytics) {
@@ -91,15 +92,19 @@ function renderMonthlyChart(analytics) {
   const el = document.getElementById('chart-monthly');
   if (!el) return;
 
-  const { sortedMonths, monthlyTotals, currency } = analytics;
+  const { sortedMonths, monthlyTotals, currency, isAllCurrencies } = analytics;
   const labels = sortedMonths.map(m => {
     const [y, mo] = m.split('-');
     const names = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     return `${names[parseInt(mo,10)-1]} '${y.slice(2)}`;
   });
 
-  const outData = sortedMonths.map(m => +monthlyTotals[m].out.toFixed(2));
-  const inData  = sortedMonths.map(m => +monthlyTotals[m].in.toFixed(2));
+  const outData = sortedMonths.map(m => isAllCurrencies
+    ? (monthlyTotals[m].outCount || 0)
+    : +monthlyTotals[m].out.toFixed(2));
+  const inData  = sortedMonths.map(m => isAllCurrencies
+    ? (monthlyTotals[m].inCount  || 0)
+    : +monthlyTotals[m].in.toFixed(2));
 
   const ctx = el.getContext('2d');
   _charts.monthly = new Chart(ctx, {
@@ -133,7 +138,9 @@ function renderMonthlyChart(analytics) {
         legend: { position: 'top' },
         tooltip: {
           callbacks: {
-            label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.raw, currency)}`,
+            label: ctx => isAllCurrencies
+              ? ` ${ctx.dataset.label}: ${ctx.raw} txns`
+              : ` ${ctx.dataset.label}: ${fmt(ctx.raw, currency)}`,
           },
         },
       },
@@ -146,7 +153,7 @@ function renderMonthlyChart(analytics) {
           grid: { color: T.grid },
           ticks: {
             color: T.text,
-            callback: v => `${v.toLocaleString()} ${currency}`,
+            callback: v => isAllCurrencies ? v.toLocaleString() : `${v.toLocaleString()} ${currency}`,
           },
           beginAtZero: true,
         },
@@ -160,13 +167,16 @@ function renderDailyChart(analytics, monthFilter = 'ALL') {
   const el = document.getElementById('chart-daily');
   if (!el) return;
 
+  const { isAllCurrencies } = analytics;
   let data = analytics.dailyChartData;
   if (monthFilter !== 'ALL') {
     data = data.filter(d => d.dateKey.startsWith(monthFilter));
   }
 
   const labels  = data.map(d => d.label);
-  const outData = data.map(d => +d.out.toFixed(2));
+  const outData = isAllCurrencies
+    ? data.map(d => d.outCount || 0)
+    : data.map(d => +d.out.toFixed(2));
 
   const ctx = el.getContext('2d');
   const gradient = makeGradient(ctx, T.indigo, 0.4, 0.0);
@@ -196,7 +206,9 @@ function renderDailyChart(analytics, monthFilter = 'ALL') {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            label: ctx => ` Spent: ${fmt(ctx.raw, analytics.currency)}`,
+            label: ctx => isAllCurrencies
+              ? ` Transactions: ${ctx.raw}`
+              : ` Spent: ${fmt(ctx.raw, analytics.currency)}`,
           },
         },
       },
@@ -213,7 +225,9 @@ function renderDailyChart(analytics, monthFilter = 'ALL') {
           grid: { color: T.grid },
           ticks: {
             color: T.text,
-            callback: v => `${v.toLocaleString()} ${analytics.currency}`,
+            callback: v => isAllCurrencies
+              ? v.toLocaleString()
+              : `${v.toLocaleString()} ${analytics.currency}`,
           },
           beginAtZero: true,
         },
@@ -289,13 +303,16 @@ function renderDailyAvgChart(analytics) {
   const el = document.getElementById('chart-daily-avg');
   if (!el) return;
 
+  const { isAllCurrencies } = analytics;
   const months = analytics.sortedMonths;
   const labels = months.map(m => {
     const [y, mo] = m.split('-');
     const names = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     return `${names[parseInt(mo,10)-1]} '${y.slice(2)}`;
   });
-  const avgs = months.map(m => +(analytics.dailyAvgPerMonth[m] || 0).toFixed(2));
+  const avgs = isAllCurrencies
+    ? months.map(m => +(analytics.dailyCountAvgPerMonth[m] || 0).toFixed(2))
+    : months.map(m => +(analytics.dailyAvgPerMonth[m] || 0).toFixed(2));
 
   _charts.dailyAvg = new Chart(el.getContext('2d'), {
     type: 'bar',
@@ -321,7 +338,9 @@ function renderDailyAvgChart(analytics) {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            label: ctx => ` Avg/day: ${fmt(ctx.raw, analytics.currency)}`,
+            label: ctx => isAllCurrencies
+              ? ` Avg/day: ${ctx.raw} txns`
+              : ` Avg/day: ${fmt(ctx.raw, analytics.currency)}`,
           },
         },
       },
@@ -329,7 +348,7 @@ function renderDailyAvgChart(analytics) {
         x: { grid: { color: T.grid }, ticks: { color: T.text } },
         y: {
           grid: { color: T.grid },
-          ticks: { color: T.text, callback: v => `${v} ${analytics.currency}` },
+          ticks: { color: T.text, callback: v => isAllCurrencies ? v : `${v} ${analytics.currency}` },
           beginAtZero: true,
         },
       },
@@ -342,14 +361,15 @@ function renderWeekdayChart(analytics) {
   const el = document.getElementById('chart-weekday');
   if (!el) return;
 
+  const { isAllCurrencies } = analytics;
   const days = analytics.weekdayPattern;
   _charts.weekday = new Chart(el.getContext('2d'), {
     type: 'bar',
     data: {
       labels: days.map(d => d.short),
       datasets: [{
-        label: 'Avg per Transaction',
-        data: days.map(d => +d.avg.toFixed(2)),
+        label: isAllCurrencies ? 'Transactions' : 'Avg per Transaction',
+        data: isAllCurrencies ? days.map(d => d.count) : days.map(d => +d.avg.toFixed(2)),
         backgroundColor: days.map((_, i) =>
           hexAlpha([T.indigo,T.purple,T.cyan,T.green,T.amber,T.pink,T.orange][i], 0.8)
         ),
@@ -366,10 +386,12 @@ function renderWeekdayChart(analytics) {
         tooltip: {
           callbacks: {
             title: ([ctx]) => analytics.weekdayPattern[ctx.dataIndex].name,
-            label: ctx => [
-              ` Avg: ${fmt(ctx.raw, analytics.currency)}`,
-              ` Transactions: ${analytics.weekdayPattern[ctx.dataIndex].count}`,
-            ],
+            label: ctx => isAllCurrencies
+              ? [` Transactions: ${ctx.raw}`]
+              : [
+                ` Avg: ${fmt(ctx.raw, analytics.currency)}`,
+                ` Transactions: ${analytics.weekdayPattern[ctx.dataIndex].count}`,
+              ],
           },
         },
       },
@@ -377,7 +399,7 @@ function renderWeekdayChart(analytics) {
         x: { grid: { color: T.grid }, ticks: { color: T.text } },
         y: {
           grid: { color: T.grid },
-          ticks: { color: T.text, callback: v => `${v} ${analytics.currency}` },
+          ticks: { color: T.text, callback: v => isAllCurrencies ? v.toLocaleString() : `${v} ${analytics.currency}` },
           beginAtZero: true,
         },
       },

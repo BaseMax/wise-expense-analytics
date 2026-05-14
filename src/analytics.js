@@ -109,7 +109,7 @@ function detectCurrencies(transactions) {
  */
 function filterTransactions(transactions, currency, statusFilter = 'COMPLETED') {
   return transactions.filter(t => {
-    const currencyMatch = t.srcCurrency === currency;
+    const currencyMatch = currency === 'ALL' || t.srcCurrency === currency;
     const statusMatch   = statusFilter === 'ALL' || t.status === statusFilter;
     return currencyMatch && statusMatch;
   });
@@ -121,9 +121,9 @@ function filterTransactions(transactions, currency, statusFilter = 'COMPLETED') 
 function buildDailyTotals(transactions) {
   const map = {};
   transactions.forEach(t => {
-    if (!map[t.dateKey]) map[t.dateKey] = { out: 0, in: 0, count: 0 };
-    if (t.direction === 'OUT') map[t.dateKey].out += t.srcAmount;
-    if (t.direction === 'IN')  map[t.dateKey].in  += t.srcAmount;
+    if (!map[t.dateKey]) map[t.dateKey] = { out: 0, in: 0, count: 0, outCount: 0, inCount: 0 };
+    if (t.direction === 'OUT') { map[t.dateKey].out += t.srcAmount; map[t.dateKey].outCount++; }
+    if (t.direction === 'IN')  { map[t.dateKey].in  += t.srcAmount; map[t.dateKey].inCount++;  }
     map[t.dateKey].count++;
   });
   return map;
@@ -136,10 +136,12 @@ function buildMonthlyTotals(dailyTotals) {
   const map = {};
   Object.entries(dailyTotals).forEach(([dateKey, day]) => {
     const monthKey = dateKey.slice(0, 7);
-    if (!map[monthKey]) map[monthKey] = { out: 0, in: 0, count: 0, activeDays: 0 };
+    if (!map[monthKey]) map[monthKey] = { out: 0, in: 0, count: 0, activeDays: 0, outCount: 0, inCount: 0 };
     map[monthKey].out        += day.out;
     map[monthKey].in         += day.in;
     map[monthKey].count      += day.count;
+    map[monthKey].outCount   += day.outCount;
+    map[monthKey].inCount    += day.inCount;
     map[monthKey].activeDays += 1;
   });
   return map;
@@ -153,12 +155,22 @@ function buildMonthlyTotals(dailyTotals) {
  * @returns {Analytics}
  */
 function computeAnalytics(allTransactions, currency, statusFilter = 'COMPLETED') {
+  const isAllCurrencies = currency === 'ALL';
   const txs = filterTransactions(allTransactions, currency, statusFilter);
 
   let totalOut = 0, totalIn = 0, totalFees = 0;
+  const outByCurrency = {};
+  const inByCurrency  = {};
   txs.forEach(t => {
-    if (t.direction === 'OUT') { totalOut += t.srcAmount; totalFees += t.feeAmount; }
-    if (t.direction === 'IN')  totalIn  += t.srcAmount;
+    if (t.direction === 'OUT') {
+      totalOut += t.srcAmount;
+      totalFees += t.feeAmount;
+      if (isAllCurrencies) outByCurrency[t.srcCurrency] = (outByCurrency[t.srcCurrency] || 0) + t.srcAmount;
+    }
+    if (t.direction === 'IN') {
+      totalIn += t.srcAmount;
+      if (isAllCurrencies) inByCurrency[t.srcCurrency]  = (inByCurrency[t.srcCurrency]  || 0) + t.srcAmount;
+    }
   });
 
   const dailyTotals   = buildDailyTotals(txs);
@@ -168,9 +180,11 @@ function computeAnalytics(allTransactions, currency, statusFilter = 'COMPLETED')
   const outDays       = Object.entries(dailyTotals).filter(([, v]) => v.out > 0);
   const dailyAvg      = outDays.length > 0 ? totalOut / outDays.length : 0;
 
-  const dailyAvgPerMonth = {};
+  const dailyAvgPerMonth      = {};
+  const dailyCountAvgPerMonth = {};
   Object.entries(monthlyTotals).forEach(([month, m]) => {
-    dailyAvgPerMonth[month] = m.activeDays > 0 ? m.out / m.activeDays : 0;
+    dailyAvgPerMonth[month]      = m.activeDays > 0 ? m.out / m.activeDays : 0;
+    dailyCountAvgPerMonth[month] = m.activeDays > 0 ? (m.outCount || 0) / m.activeDays : 0;
   });
 
   const minMaxPerMonth = {};
@@ -244,11 +258,13 @@ function computeAnalytics(allTransactions, currency, statusFilter = 'COMPLETED')
 
   const sortedDays = Object.keys(dailyTotals).sort();
   const dailyChartData = sortedDays.map(d => ({
-    dateKey: d,
-    label:   formatDayLabel(d),
-    out:     dailyTotals[d].out,
-    in:      dailyTotals[d].in,
-    count:   dailyTotals[d].count,
+    dateKey:  d,
+    label:    formatDayLabel(d),
+    out:      dailyTotals[d].out,
+    in:       dailyTotals[d].in,
+    count:    dailyTotals[d].count,
+    outCount: dailyTotals[d].outCount || 0,
+    inCount:  dailyTotals[d].inCount  || 0,
   }));
 
   return {
@@ -275,6 +291,10 @@ function computeAnalytics(allTransactions, currency, statusFilter = 'COMPLETED')
     weekdayPattern,
     monthlySummary,
     dailyChartData,
+    dailyCountAvgPerMonth,
+    isAllCurrencies,
+    outByCurrency,
+    inByCurrency,
     sortedMonths: Object.keys(monthlyTotals).sort(),
   };
 }

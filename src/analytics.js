@@ -13,8 +13,18 @@ function parseDate(str) {
   return isNaN(d.getTime()) ? null : d;
 }
 
-function toDateKey(d)  { return d.toISOString().slice(0, 10); }   // YYYY-MM-DD
-function toMonthKey(d) { return d.toISOString().slice(0, 7); }    // YYYY-MM
+function toDateKey(d) {
+  const y  = d.getFullYear();
+  const m  = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dd}`;
+}
+
+function toMonthKey(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  return `${y}-${m}`;
+}
 
 function formatMonthLabel(monthKey) {
   const [y, m] = monthKey.split('-');

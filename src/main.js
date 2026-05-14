@@ -125,24 +125,157 @@ function renderCurrencyTabs() {
   });
 }
 
-function buildMonthFilterOptions() {
-  const sel = $('daily-month-filter');
-  while (sel.options.length > 1) sel.remove(1);
+const MONTH_NAMES_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONTH_NAMES_LONG  = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
-  (App.analytics?.sortedMonths || []).forEach(m => {
-    const opt = document.createElement('option');
-    opt.value = m;
-    const [y, mo] = m.split('-');
-    const names = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    opt.textContent = `${names[parseInt(mo, 10) - 1]} ${y}`;
-    sel.appendChild(opt);
+function monthLabel(monthKey, long = false) {
+  const [y, m] = monthKey.split('-');
+  return `${(long ? MONTH_NAMES_LONG : MONTH_NAMES_SHORT)[parseInt(m, 10) - 1]} ${y}`;
+}
+
+function buildMonthNavigator() {
+  const display = $('month-display');
+  const prevBtn = $('month-prev');
+  const nextBtn = $('month-next');
+  if (!display || !prevBtn || !nextBtn) return;
+
+  const sortedMonths = App.analytics?.sortedMonths || [];
+
+  if (App.dailyMonthFilter === 'ALL') {
+    display.textContent = 'All Months';
+    prevBtn.disabled = true;
+    nextBtn.disabled = sortedMonths.length === 0;
+  } else {
+    const idx = sortedMonths.indexOf(App.dailyMonthFilter);
+    display.textContent = monthLabel(App.dailyMonthFilter);
+    prevBtn.disabled = false;
+    nextBtn.disabled = idx >= sortedMonths.length - 1;
+  }
+}
+
+function navigateMonth(delta) {
+  const sortedMonths = App.analytics?.sortedMonths || [];
+  if (!sortedMonths.length) return;
+
+  if (App.dailyMonthFilter === 'ALL') {
+    if (delta > 0) App.dailyMonthFilter = sortedMonths[sortedMonths.length - 1];
+    else return;
+  } else {
+    const idx    = sortedMonths.indexOf(App.dailyMonthFilter);
+    const newIdx = (idx === -1 ? sortedMonths.length - 1 : idx) + delta;
+    if (newIdx < 0) {
+      App.dailyMonthFilter = 'ALL';
+    } else if (newIdx >= sortedMonths.length) {
+      return;
+    } else {
+      App.dailyMonthFilter = sortedMonths[newIdx];
+    }
+  }
+
+  buildMonthNavigator();
+  renderDailyChart(App.analytics, App.dailyMonthFilter);
+  renderDailyBreakdownTable(App.dailyMonthFilter);
+}
+
+function renderDailyBreakdownTable(monthKey) {
+  const container = $('daily-breakdown');
+  if (!container) return;
+
+  if (monthKey === 'ALL') {
+    container.innerHTML = `
+      <div class="breakdown-hint">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        Use the month navigator above to see a day-by-day breakdown table
+      </div>`;
+    return;
+  }
+
+  const currency     = App.selectedCurrency;
+  const statusFilter = $('status-filter').value;
+
+  const monthTxs = App.transactions.filter(t =>
+    t.srcCurrency === currency &&
+    t.monthKey    === monthKey &&
+    t.direction   === 'OUT' &&
+    (statusFilter === 'ALL' || t.status === statusFilter)
+  );
+
+  const byDay = {};
+  monthTxs.forEach(t => {
+    if (!byDay[t.dateKey]) byDay[t.dateKey] = { out: 0, count: 0, cats: {}, min: Infinity, max: -Infinity };
+    const d = byDay[t.dateKey];
+    d.out  += t.srcAmount;
+    d.count++;
+    d.cats[t.category] = (d.cats[t.category] || 0) + t.srcAmount;
+    if (t.srcAmount < d.min) d.min = t.srcAmount;
+    if (t.srcAmount > d.max) d.max = t.srcAmount;
   });
 
-  sel.value = App.dailyMonthFilter;
+  const days = Object.keys(byDay).sort();
+
+  if (!days.length) {
+    container.innerHTML = '<div class="empty-state">No spending data for this month</div>';
+    return;
+  }
+
+  const maxOut   = Math.max(...days.map(d => byDay[d].out));
+  const totalOut = days.reduce((s, d) => s + byDay[d].out, 0);
+  const WDAYS    = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+  const rows = days.map(dateKey => {
+    const d      = byDay[dateKey];
+    const date   = new Date(dateKey + 'T00:00:00');
+    const topCat = Object.entries(d.cats).sort((a, b) => b[1] - a[1])[0]?.[0] || '—';
+    const pct    = maxOut > 0 ? (d.out / maxOut * 100).toFixed(1) : 0;
+    const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+    return `
+      <tr${isWeekend ? ' class="weekend-row"' : ''}>
+        <td>
+          <span class="day-num">${date.getDate()}</span>
+          <span class="day-wday${isWeekend ? ' day-wday-weekend' : ''}">${WDAYS[date.getDay()]}</span>
+        </td>
+        <td>
+          <div class="progress-bar-wrap" style="margin-bottom:5px">
+            <div class="progress-bar-fill" style="width:${pct}%"></div>
+          </div>
+          <span class="amount-out">${fmtAmt(d.out, currency)}</span>
+        </td>
+        <td>${d.count}</td>
+        <td><span class="category-pill">${escHtml(topCat)}</span></td>
+        <td class="amount-muted">${fmtAmt(d.min === Infinity ? 0 : d.min, currency)}</td>
+        <td class="amount-muted">${fmtAmt(d.max === -Infinity ? 0 : d.max, currency)}</td>
+      </tr>`;
+  }).join('');
+
+  container.innerHTML = `
+    <div class="breakdown-header">
+      <span class="breakdown-title">${monthLabel(monthKey, true)}</span>
+      <span class="breakdown-stat"><strong>${days.length}</strong> active day${days.length !== 1 ? 's' : ''}</span>
+      <span class="breakdown-stat"><strong>${monthTxs.length}</strong> transaction${monthTxs.length !== 1 ? 's' : ''}</span>
+      <span class="breakdown-stat">Total <strong class="amount-out">${fmtAmt(totalOut, currency)}</strong></span>
+      <span class="breakdown-stat">Avg/day <strong>${fmtAmt(totalOut / days.length, currency)}</strong></span>
+    </div>
+    <div class="table-scroll">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Day</th>
+            <th>Amount Spent</th>
+            <th>Txns</th>
+            <th>Top Category</th>
+            <th>Min Txn</th>
+            <th>Max Txn</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
 }
 
 function fmtAmt(amount, currency) {
-  return `${currency} ${amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
+  return `${amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')} ${currency}`;
 }
 
 function updateStats(a) {
@@ -288,13 +421,14 @@ function refreshDashboard() {
   App.analytics = computeAnalytics(App.transactions, App.selectedCurrency, statusFilter);
 
   renderCurrencyTabs();
-  buildMonthFilterOptions();
+  buildMonthNavigator();
   updateStats(App.analytics);
   updateFileInfoBar();
   renderMerchantsTable(App.analytics);
   renderMinMaxTable(App.analytics);
   renderMonthlySummaryTable(App.analytics);
   renderAllCharts(App.analytics, App.dailyMonthFilter);
+  renderDailyBreakdownTable(App.dailyMonthFilter);
 }
 
 function processFile(file) {
@@ -345,8 +479,8 @@ function processFile(file) {
           showView('dashboard');
           showToast(`Loaded ${App.transactions.length.toLocaleString()} transactions`, 'success');
         } catch (err) {
-          console.error(err);
-          showToast('Unexpected error processing file.', 'error');
+          console.error('[WEA]', err);
+          showToast(`Error: ${err.message || err}`, 'error');
         } finally {
           hideLoading();
         }
@@ -397,10 +531,9 @@ function initEvents() {
     if (file) processFile(file);
   });
 
-  // Allow dropping anywhere else on the upload view (outside the drop zone)
   Views.upload.addEventListener('dragover', e => e.preventDefault());
   Views.upload.addEventListener('drop', e => {
-    if (dropZone.contains(e.target)) return; // already handled by dropZone listener
+    if (dropZone.contains(e.target)) return;
     e.preventDefault();
     const file = e.dataTransfer.files[0];
     if (file) processFile(file);
@@ -421,10 +554,8 @@ function initEvents() {
 
   $('status-filter').addEventListener('change', () => refreshDashboard());
 
-  $('daily-month-filter').addEventListener('change', e => {
-    App.dailyMonthFilter = e.target.value;
-    renderDailyChart(App.analytics, App.dailyMonthFilter);
-  });
+  $('month-prev').addEventListener('click', () => navigateMonth(-1));
+  $('month-next').addEventListener('click', () => navigateMonth(+1));
 }
 
 document.addEventListener('DOMContentLoaded', () => {

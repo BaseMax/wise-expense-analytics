@@ -1088,6 +1088,32 @@ ul, ol { list-style: none; }
 .day-min { color: var(--green-light); font-weight: 600; }
 .day-max { color: var(--red-light); font-weight: 600; }
 
+/* Daily breakdown table cells */
+.day-num {
+  display: inline-block;
+  width: 22px;
+  font-weight: 700;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.day-wday {
+  display: inline-block;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-left: 4px;
+}
+
+.day-wday-weekend { color: var(--amber); }
+
+.weekend-row { background: rgba(245, 158, 11, 0.03); }
+.weekend-row:hover { background: rgba(245, 158, 11, 0.06) !important; }
+
+.amount-muted {
+  color: var(--text-2);
+  font-size: 12px;
+}
+
 /* ═══════════════════════════════
    UTILITY
 ═══════════════════════════════ */

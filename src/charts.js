@@ -83,7 +83,7 @@ function destroyAllCharts() {
 }
 
 function fmt(amount, currency, decimals = 2) {
-  return `${currency} ${amount.toFixed(decimals).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
+  return `${amount.toFixed(decimals).replace(/\B(?=(\d{3})+(?!\d))/g, ',')} ${currency}`;
 }
 
 function renderMonthlyChart(analytics) {
@@ -146,7 +146,7 @@ function renderMonthlyChart(analytics) {
           grid: { color: T.grid },
           ticks: {
             color: T.text,
-            callback: v => `${currency} ${v.toLocaleString()}`,
+            callback: v => `${v.toLocaleString()} ${currency}`,
           },
           beginAtZero: true,
         },
@@ -213,7 +213,7 @@ function renderDailyChart(analytics, monthFilter = 'ALL') {
           grid: { color: T.grid },
           ticks: {
             color: T.text,
-            callback: v => `${analytics.currency} ${v.toLocaleString()}`,
+            callback: v => `${v.toLocaleString()} ${analytics.currency}`,
           },
           beginAtZero: true,
         },
@@ -329,7 +329,7 @@ function renderDailyAvgChart(analytics) {
         x: { grid: { color: T.grid }, ticks: { color: T.text } },
         y: {
           grid: { color: T.grid },
-          ticks: { color: T.text, callback: v => `${analytics.currency} ${v}` },
+          ticks: { color: T.text, callback: v => `${v} ${analytics.currency}` },
           beginAtZero: true,
         },
       },
@@ -377,7 +377,7 @@ function renderWeekdayChart(analytics) {
         x: { grid: { color: T.grid }, ticks: { color: T.text } },
         y: {
           grid: { color: T.grid },
-          ticks: { color: T.text, callback: v => `${analytics.currency} ${v}` },
+          ticks: { color: T.text, callback: v => `${v} ${analytics.currency}` },
           beginAtZero: true,
         },
       },
